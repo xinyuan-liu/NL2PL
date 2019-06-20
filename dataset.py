@@ -72,7 +72,7 @@ class hearthstone:
         self.NL_voc=build_voc(self.train_in_token, min_count=2)
         print("len(NL_voc)=%s"%len(self.NL_voc))
 
-        self.train_out_token=self.parse_out(train_out)
+        self.train_out_token=self.parse_out(train_out,True)
         self.test_out_token=self.parse_out(test_out)
         self.dev_out_token=self.parse_out(dev_out)
         #print(maxlen(self.train_in_token))
@@ -139,7 +139,7 @@ class hearthstone:
         print("overlong PL:%s"%PL_cut_cnt)
         return X_arr,Y_arr
 
-    def parse_out(self,path):
+    def parse_out(self,path, gen_grammar_rule=False):
         outputs=[]
         bug_cnt=0
         with open(path) as f:
@@ -151,11 +151,13 @@ class hearthstone:
                         bug_cnt+=1
                         src=src.replace(key,bug_fix[key])
                 try:
-                    outputs.append(pythonparser.parse(src))
+                    outputs.append(pythonparser.parse(src, gen_grammar_rule))
                 except:
                     print(src)
                     print(line)
                     input()
+        if gen_grammar_rule:
+            self.grammar=pythonparser.grammar
         return outputs
 
     def parse_in(self,path):
@@ -168,5 +170,5 @@ class hearthstone:
 if __name__=="__main__":
     hs=hearthstone()
     X_train,Y_train=hs.dataset('train')
-    print(X_train)
     X_train,Y_train=hs.dataset('dev')
+    print(hs.grammar)

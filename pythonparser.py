@@ -1,6 +1,7 @@
 import ast
 import astunparse
 import dataset
+import collections
 
 ignored=['ctx']
 def visit(node, args):
@@ -28,7 +29,9 @@ def node_to_string(node):
     else:
         return str(node)
 
-def parse(source):
+grammar={}
+def parse(source, gen_grammar_rule=False):
+            global grammar
             tokens=[]
             root=ast.parse(source)
             q=[]
@@ -41,13 +44,24 @@ def parse(source):
                 parent=next_node[2]
                 if name in ignored:
                     continue
-                #print(' '.join((node_to_string(parent),name,node_to_string(val))))
+                parent_string=node_to_string(parent)
+                if gen_grammar_rule:
+                    if isinstance(parent,ast.AST):
+                        if not parent_string in grammar:
+                            grammar[parent_string]=collections.OrderedDict()
+                            fields=list(ast.iter_fields(parent))
+                            for fieldname, value in fields:
+                                if fieldname in ignored:
+                                    continue
+                                #TODO: all valid types
+                                grammar[parent_string][fieldname]=type(value)
+                
                 if isinstance(val,list):
                     for node in val:
-                        tokens.append((node_to_string(parent),name,node_to_string(node)))
-                    tokens.append((node_to_string(parent),name,'EOL'))
+                        tokens.append((parent_string,name,node_to_string(node)))
+                    tokens.append((parent_string,name,'EOL'))
                 else:
-                    tokens.append((node_to_string(parent),name,node_to_string(val)))
+                    tokens.append((parent_string,name,node_to_string(val)))
                 if isinstance(val,ast.AST):
                     visit(val,[q])
                 elif isinstance(val,list):
