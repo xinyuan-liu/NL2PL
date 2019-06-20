@@ -73,12 +73,16 @@ class hearthstone:
         print("len(NL_voc)=%s"%len(self.NL_voc))
 
         self.train_out_token=self.parse_out(train_out)
-        self.test_out_token=self.parse_in(test_out)
-        self.dev_out_token=self.parse_in(dev_out)
+        self.test_out_token=self.parse_out(test_out)
+        self.dev_out_token=self.parse_out(dev_out)
         #print(maxlen(self.train_in_token))
         print(maxlen(self.train_out_token))
         self.PL_voc=build_voc(self.train_out_token, min_count=2)
         print("len(PL_voc)=%s"%len(self.PL_voc))
+
+        self.PL_dict={}
+        for key in self.PL_voc:
+            self.PL_dict[self.PL_voc[key]]=key
 
         self.shift=True
         self.max_NL_len=50
@@ -113,22 +117,23 @@ class hearthstone:
             PL=PL[:self.max_PL_len]
             PL=[(SOS,SOS,SOS)]+PL+[(EOS,EOS,EOS)]
             #PL=PL+[(PAD,PAD,PAD)]+(self.max_PL_len+2-len(PL))
+            #print (PL)
             parent=[node[0] for node in PL]
             name=[node[1] for node in PL]
-            node=[node[2] for node in PL]
+            trg=[node[2] for node in PL]
             if self.shift:
                 parent=parent[1:]
                 name=name[1:]
-                node=node[:-1]
-                assert len(name)==len(node)
+                trg=trg[:-1]
+                assert len(name)==len(trg)
             parent=parent+[PAD]*(self.max_PL_len+2-len(parent))
             name=name+[PAD]*(self.max_PL_len+2-len(name))
-            node=node+[PAD]*(self.max_PL_len+2-len(node))
+            trg=trg+[PAD]*(self.max_PL_len+2-len(trg))
             
             parent=[token2index(word,self.PL_voc) for word in parent]
             name=[token2index(word,self.PL_voc) for word in name]
-            node=[token2index(word,self.PL_voc) for word in node]
-            Y_arr.append([parent,name,node])
+            trg=[token2index(word,self.PL_voc) for word in trg]
+            Y_arr.append([parent,name,trg])
         Y_arr=np.array(Y_arr)
         print(Y_arr.shape)
         print("overlong PL:%s"%PL_cut_cnt)
@@ -151,7 +156,6 @@ class hearthstone:
                     print(src)
                     print(line)
                     input()
-        assert bug_cnt==len(bug_fix)
         return outputs
 
     def parse_in(self,path):
@@ -165,3 +169,4 @@ if __name__=="__main__":
     hs=hearthstone()
     X_train,Y_train=hs.dataset('train')
     print(X_train)
+    X_train,Y_train=hs.dataset('dev')

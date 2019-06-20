@@ -1,5 +1,6 @@
 import ast
 import astunparse
+import dataset
 
 ignored=['ctx']
 def visit(node, args):
@@ -53,6 +54,7 @@ def parse(source):
                     for node in reversed(val):
                         visit(node,[q])
             return tokens
+
 if __name__=="__main__":
     with open('card2code/third_party/hearthstone/train_hs.out') as f:
         for line in f:

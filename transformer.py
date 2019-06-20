@@ -37,7 +37,6 @@ class Encoder(nn.Module):
         
         #src = [batch size, src sent len]
         #src_mask = [batch size, src sent len]
-        
         pos = torch.arange(0, src.shape[1]).unsqueeze(0).repeat(src.shape[0], 1).to(self.device)
         
         src = self.do((self.tok_embedding(src) * self.scale) + self.pos_embedding(pos))
@@ -174,6 +173,7 @@ class Decoder(nn.Module):
         super().__init__()
         
         self.output_dim = output_dim
+        assert hid_dim % 3 == 0
         self.hid_dim = hid_dim
         self.n_layers = n_layers
         self.n_heads = n_heads
@@ -184,7 +184,7 @@ class Decoder(nn.Module):
         self.dropout = dropout
         self.device = device
         
-        self.tok_embedding = nn.Embedding(output_dim, hid_dim)
+        self.tok_embedding = nn.Embedding(output_dim, hid_dim//3)
         self.pos_embedding = nn.Embedding(1000, hid_dim)
         
         self.layers = nn.ModuleList([decoder_layer(hid_dim, n_heads, pf_dim, self_attention, positionwise_feedforward, dropout, device)
@@ -196,7 +196,7 @@ class Decoder(nn.Module):
         
         self.scale = torch.sqrt(torch.FloatTensor([hid_dim])).to(device)
         
-    def forward(self, trg, src, trg_mask, src_mask):
+    def forward(self, parent, name, trg, src, trg_mask, src_mask):
         
         #trg = [batch_size, trg sent len]
         #src = [batch_size, src sent len]
@@ -205,7 +205,9 @@ class Decoder(nn.Module):
         
         pos = torch.arange(0, trg.shape[1]).unsqueeze(0).repeat(trg.shape[0], 1).to(self.device)
                 
-        trg = self.do((self.tok_embedding(trg) * self.scale) + self.pos_embedding(pos))
+        embed=torch.cat((self.tok_embedding(trg), self.tok_embedding(parent), self.tok_embedding(name)),dim=2)
+        trg = self.do((embed * self.scale) + self.pos_embedding(pos))
+        
         
         #trg = [batch size, trg sent len, hid dim]
         
@@ -265,18 +267,18 @@ class Seq2Seq(nn.Module):
         
         return src_mask, trg_mask
     
-    def forward(self, src, trg):
+    def forward(self, src, parent, name, trg):
         
         #src = [batch size, src sent len]
-        #trg = [batch size, trg sent len]
-                
+        #parent, name, trg = [batch size, trg sent len]
+        
         src_mask, trg_mask = self.make_masks(src, trg)
         
         enc_src = self.encoder(src, src_mask)
         
         #enc_src = [batch size, src sent len, hid dim]
                 
-        out = self.decoder(trg, enc_src, trg_mask, src_mask)
+        out = self.decoder(parent, name, trg, enc_src, trg_mask, src_mask)
         
         #out = [batch size, trg sent len, output dim]
         
