@@ -1,5 +1,8 @@
 import torch
 import dataset
+import queue
+from functools import reduce
+import math
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 class decode_list:
@@ -10,6 +13,8 @@ class decode_list:
         self.pending_node=[]
         self.pending_list=None
         self.cur_idx=0
+        self.priority=0
+        self.p_list=[]
         self.hs=hs
 
     def get_pending_node(self):
@@ -17,7 +22,24 @@ class decode_list:
         self.pending_node=self.pending_node[1:]
         return node
     
-    def update(self,output):
+    def copy(self):
+        ret=decode_list(hs)
+        ret.parent=self.parent.copy()
+        ret.name=self.name.copy()
+        ret.trg=self.trg.copy()
+        ret.pending_node=self.pending_node.copy()
+        if self.pending_list==None:
+            ret.pending_list=None
+        else:
+            ret.pending_list=self.pending_list.copy()
+        ret.cur_idx=self.cur_idx
+        ret.priority=self.priority
+        ret.p_list=self.p_list.copy()
+        return ret
+
+    def update(self,outputi):
+        output=hs.PL_dict[outputi]
+        self.trg.append(outputi)
         if self.pending_list!=None:
             if output=='EOL':
                 for node in reversed(self.pending_list):
@@ -32,6 +54,13 @@ class decode_list:
                 fields=self.hs.grammar[output].keys()
                 self.pending_node=[(output,field) for field in fields]+self.pending_node
         self.cur_idx+=1
+
+    def update_priority(self,p):
+        self.p_list.append(p)
+        #for i in self.p_list:
+            
+        self.priority= sum(map(math.log,self.p_list)) / len(self.p_list)
+        
 
     def next_step(self):
         if self.cur_idx != 0:
@@ -49,27 +78,29 @@ class decode_list:
                 self.name.append(self.name[-1])
         return True
 
-def decode(model, src, hs):
+    def __lt__(self, other):
+        return self.priority < other.priority
+
+def decode(model, src, hs, window_size=2):
     model.eval()
+    ret=queue.PriorityQueue()
     with torch.no_grad():
         src=torch.tensor([src]).to(device)
         pad_idx=hs.PL_voc[dataset.PAD]
         
         dl=decode_list(hs)
-        
-        while(dl.cur_idx<hs.max_PL_len+1):
-            if not dl.next_step():
-                break
+        while(True):
+            if dl.cur_idx>=hs.max_PL_len+1 or not dl.next_step():
+                return dl
             output = model(src, torch.tensor([dl.parent]).to(device), torch.tensor([dl.name]).to(device), torch.tensor([dl.trg]).to(device))
-            # TODO: Beam-Search
-            _, indices=torch.sort(output[0][dl.cur_idx], descending=True)
-            maxi=indices[0].item()
-            output=hs.PL_dict[maxi]
-            dl.trg.append(maxi)
-            print(output)
-            dl.update(output)
-            input()
-        
+            output=output[0][dl.cur_idx]
+            _, indices=torch.sort(output, descending=True)
+            index=indices[i].item()
+            dl.update(index)
+            dl.update_priority(output[index].item())
+
+def seq2tree(trg, hs):
+    pass
 
 if __name__=="__main__":
     hs=dataset.hearthstone()
@@ -77,6 +108,7 @@ if __name__=="__main__":
     X_test,Y_test=hs.dataset('test')
     for i in range(len(X_test)):
         X=X_test[i]
-        print(X)
-        decode(model,X,hs)
+        dl=decode(model,X,hs)
+        #decode(model,X,hs)
+        print(dl.trg)
         input()

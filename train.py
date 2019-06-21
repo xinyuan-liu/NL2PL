@@ -119,7 +119,7 @@ def decode(model, src):
         output = model(src, )
 
 clip=1
-num_epochs=100
+num_epochs=50
 
 best=1000
 for epoch in range(num_epochs):

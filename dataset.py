@@ -2,6 +2,9 @@ import pythonparser
 import nltk
 import ast
 import numpy as np
+import os
+import pickle
+
 def split(string):
     pattern =r'''(?x)
     <[^>]+>
@@ -15,7 +18,11 @@ PAD='_PAD_'
 SOS='_SOS_'
 EOS='_EOS_'
 preserve=[SOS,EOS,UNK,PAD]
-def build_voc(tokens,min_count=0):
+def build_voc(tokens,name,min_count=0):
+    if os.path.exists(name+'.pkl'):
+        with open(name+'.pkl','rb') as f:
+            voc=pickle.load(f)
+        return voc
     voc_cnt={}
     for l in tokens:
         for token in l:
@@ -69,7 +76,7 @@ class hearthstone:
         self.train_in_token=self.parse_in(train_in)
         self.test_in_token=self.parse_in(test_in)
         self.dev_in_token=self.parse_in(dev_in)
-        self.NL_voc=build_voc(self.train_in_token, min_count=2)
+        self.NL_voc=build_voc(self.train_in_token, 'NL_voc', min_count=2)
         print("len(NL_voc)=%s"%len(self.NL_voc))
 
         self.train_out_token=self.parse_out(train_out,True)
@@ -77,7 +84,7 @@ class hearthstone:
         self.dev_out_token=self.parse_out(dev_out)
         #print(maxlen(self.train_in_token))
         print(maxlen(self.train_out_token))
-        self.PL_voc=build_voc(self.train_out_token, min_count=2)
+        self.PL_voc=build_voc(self.train_out_token,'PL_voc', min_count=2)
         print("len(PL_voc)=%s"%len(self.PL_voc))
 
         self.PL_dict={}
@@ -169,6 +176,8 @@ class hearthstone:
     
 if __name__=="__main__":
     hs=hearthstone()
+    #pickle.dump(hs.NL_voc,open('NL_voc.pkl','wb'))
+    #pickle.dump(hs.PL_voc,open('PL_voc.pkl','wb'))
     X_train,Y_train=hs.dataset('train')
     X_train,Y_train=hs.dataset('dev')
-    print(hs.grammar)
+#    print(hs.grammar)
