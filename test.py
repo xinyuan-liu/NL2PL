@@ -2,11 +2,19 @@ import torch
 import dataset
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+class decode_list:
+    def __init__(self,hs):
+        self.parent=[hs.PL_voc['root']]
+        self.name=[hs.PL_voc['root']]
+        self.[hs.PL_voc[dataset.SOS]]
+
 def decode(model, src, hs):
     model.eval()
     with torch.no_grad():
         src=torch.tensor([src]).to(device)
         pad_idx=hs.PL_voc[dataset.PAD]
+        
+        #dl=decode_list()
         parent=[hs.PL_voc['root']]
         name=[hs.PL_voc['root']]
         trg=[hs.PL_voc[dataset.SOS]]
