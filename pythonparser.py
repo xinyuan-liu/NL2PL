@@ -2,6 +2,7 @@ import ast
 import astunparse
 import dataset
 import collections
+import queue
 
 ignored=['ctx']
 def visit(node, args):
@@ -69,6 +70,49 @@ def parse(source, gen_grammar_rule=False):
                         visit(node,[q])
             return tokens
 
+def new_node(clazz,grammar):
+    assert clazz in grammar
+    return getattr(ast,clazz[2:-2])()
+
+def get_field(q, _type, grammar):
+    if _type==list:
+        l=[]
+        while(True):
+            nxt=q.get()
+            if nxt=='EOL':
+                break
+            l.append(nxt)
+        for i in range(len(l)):
+            if l[i] in grammar:
+                l[i]=get_node(q, l[i], grammar)
+        return l
+    else:
+        node=q.get()
+        if node in grammar:
+            return get_node(q,node, grammar)
+        elif node=="None":
+            return None
+        else:
+            return node
+
+def get_node(q, clazz, grammar):
+    assert clazz in grammar
+    node=new_node(clazz,grammar)
+    for field in grammar[clazz].keys():
+        node.__setattr__(field, get_field(q, grammar[clazz][field], grammar))
+    return node
+
+def seq2tree(trg, hs):
+    if type(trg[0])==int:
+        trg=[hs.PL_dict[i] for i in trg]
+    #print(trg)
+    grammar=hs.grammar
+    if trg[0]=='__Module__':
+        q=queue.Queue()
+        for i in range(1, len(trg)):
+            q.put(trg[i])
+        return get_node(q, '__Module__', grammar)
+
 if __name__=="__main__":
     with open('card2code/third_party/hearthstone/train_hs.out') as f:
         for line in f:
@@ -76,6 +120,8 @@ if __name__=="__main__":
             line=line.replace('''§''','\n')
             print(line)
             a=(parse(line))
+            root=ast.parse(line)
+            print(ast.dump(root))
             for pair in a:
                 print(pair)
             input()

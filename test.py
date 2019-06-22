@@ -3,6 +3,8 @@ import dataset
 import queue
 from functools import reduce
 import math
+import torch.nn.functional as F
+import pythonparser
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 class decode_list:
@@ -21,7 +23,7 @@ class decode_list:
         node=self.pending_node[0]
         self.pending_node=self.pending_node[1:]
         return node
-    
+
     def copy(self):
         ret=decode_list(hs)
         ret.parent=self.parent.copy()
@@ -57,10 +59,8 @@ class decode_list:
 
     def update_priority(self,p):
         self.p_list.append(p)
-        #for i in self.p_list:
-            
-        self.priority= sum(map(math.log,self.p_list)) / len(self.p_list)
-        
+        self.priority = sum(self.p_list) / len(self.p_list)
+
 
     def next_step(self):
         if self.cur_idx != 0:
@@ -87,28 +87,84 @@ def decode(model, src, hs, window_size=2):
     with torch.no_grad():
         src=torch.tensor([src]).to(device)
         pad_idx=hs.PL_voc[dataset.PAD]
-        
+
         dl=decode_list(hs)
+        candidate = None
+        priority_list = [[None] * window_size, [None] * window_size]
+        priority_list[0][0] = dl
+        round = 0
         while(True):
-            if dl.cur_idx>=hs.max_PL_len+1 or not dl.next_step():
-                return dl
-            output = model(src, torch.tensor([dl.parent]).to(device), torch.tensor([dl.name]).to(device), torch.tensor([dl.trg]).to(device))
-            output=output[0][dl.cur_idx]
-            _, indices=torch.sort(output, descending=True)
-            index=indices[i].item()
-            dl.update(index)
-            dl.update_priority(output[index].item())
+            #print(1)
+            #print(round)
+            if(round>=hs.max_PL_len+1):
+                break
+            for i in range(window_size):
+                priority_list[(round + 1) % 2][i] = None
+            for i in range(window_size):
+                if priority_list[round % 2][i] == None:
+                    continue
+                dl = priority_list[round % 2][i]
+                #print(dl.cur_idx)
+                if dl.cur_idx>=hs.max_PL_len+1 or not dl.next_step():
+                    if candidate == None or candidate.priority < dl.priority:
+                        candidate = dl.copy()
+                    continue
+                output = model(src, torch.tensor([dl.parent]).to(device), torch.tensor([dl.name]).to(device), torch.tensor([dl.trg]).to(device))
+                output=output[0][dl.cur_idx]
+                output=F.log_softmax(output, dim=0)
+                _, indices=torch.sort(output, descending=True)
+                for j in range(window_size):
+                    dl2 = dl.copy()
+                    index=indices[j].item()
+                    dl2.update(index)
+                    dl2.update_priority(output[index].item())
+                    mininum_index = 0
+                    for k in range(window_size):
+                        if priority_list[(round + 1) % 2][mininum_index] == None:
+                            break
+                        if priority_list[(round + 1) % 2][k] == None or priority_list[(round + 1) % 2][k].priority < priority_list[(round + 1) % 2][mininum_index].priority:
+                            mininum_index = k
+                    if priority_list[(round + 1) % 2][mininum_index] == None or priority_list[(round + 1) % 2][mininum_index].priority < dl2.priority:
+                        priority_list[(round + 1) % 2][mininum_index] = dl2
+            round += 1
+        return candidate
 
 def seq2tree(trg, hs):
     pass
 
 if __name__=="__main__":
+    import nltk
     hs=dataset.hearthstone()
     model=torch.load('model.weights')
     X_test,Y_test=hs.dataset('test')
+    failcnt=0
+    blues=[]
     for i in range(len(X_test)):
         X=X_test[i]
         dl=decode(model,X,hs)
-        #decode(model,X,hs)
-        print(dl.trg)
+        trg=dl.trg
+        #print(trg)
+        ref=[c for c in Y_test[i][2] if c!=0]
+        #print(oracle)
+        blue=nltk.translate.bleu_score.sentence_bleu([ref],trg)
+        print(blue)
+        blues.append(blue)
+        #input()
+        continue
+        if trg[0]==3:
+            trg=trg[1:]
+        node=pythonparser.seq2tree(trg, hs)
+        import ast
+        import astunparse
+        #print(ast.dump(node))
+        try:
+            code=astunparse.unparse(node)
+            print(code)
+        except:
+            failcnt+=1
+            print(ast.dump(node))
+        #print(astunparse.unparse(node))
+        
         input()
+    print(failcnt)
+    print(sum(blues)/len(blues))
